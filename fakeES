@@ -1,0 +1,79 @@
+#!/usr/bin/python
+
+from flask import Flask, jsonify, request
+from werkzeug.exceptions import default_exceptions
+from werkzeug.exceptions import HTTPException
+
+__all__ = ['make_json_app']
+
+def make_json_app(import_name, **kwargs):
+    """
+    Creates a JSON-oriented Flask app.
+
+    All error responses that you don't specifically
+    manage yourself will have application/json content
+    type, and will contain JSON like this (just an example):
+
+    { "message": "405: Method Not Allowed" }
+    """
+    def make_json_error(ex):
+        response = jsonify(message=str(ex))
+        response.status_code = (ex.code
+                                if isinstance(ex, HTTPException)
+                                else 500)
+        return response
+
+    app = Flask(import_name, **kwargs)
+
+    for code in default_exceptions.iterkeys():
+        app.error_handler_spec[None][code] = make_json_error
+
+    return app
+
+app = make_json_app(__name__)
+app.debug = True
+#app.config.update(
+#  SERVER_NAME='localhost:9202'
+#)
+
+@app.route('/<index>/<type>/_bulk', methods=['POST','PUT'])
+def _bulk(index,type):
+    resp = jsonify( took=0, errors=False, items=[] )
+    app.logger.debug(request.data)
+    return resp
+
+@app.route('/_nodes/http', methods=['GET'])
+def _nodes():
+    resp = jsonify(
+      nodes = {
+      	"vImMc2yuR2Cr8Ot26Tlx7g":
+					{
+						"ip": "127.0.0.1",
+						"build": "dee175d",
+						"transport_address": "inet[/127.0.0.1:9300]",
+						"http_address": "inet[/127.0.0.1:9200]",
+						"name": "fakeNODE",
+						"http":
+						  {
+						  	"bound_address": "inet[/0:0:0:0:0:0:0:0%0:9200]",
+						  	"max_content_length_in_bytes": 104857600,
+						  	"publish_address": "inet[/127.0.0.1:9200]"
+						  },
+						"version":"1.3.2",
+						"host":"localhost"
+					}
+				},
+				cluster_name = "fakeES"
+			)
+    return resp
+
+@app.route('/', defaults={'path': ''}, methods=['GET','POST'])
+@app.route('/<path:path>', methods=['GET','POST'])
+def catch_all(path):
+    resp = jsonify( took=0, errors=False, message='You want path: %s' % path)
+    return resp
+
+
+if __name__ == '__main__':
+    app.run(port=9200)
+
